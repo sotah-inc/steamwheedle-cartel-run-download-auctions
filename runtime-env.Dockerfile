@@ -11,6 +11,6 @@ RUN apk update \
 WORKDIR /srv/app
 
 # copying in built app
-COPY --from=steamwheedle-cartel-run-download-auctions /go/bin/app /go/bin/app
+COPY --from=steamwheedle-cartel/run-download-auctions/build /go/bin/app /go/bin/app
 
 ENTRYPOINT ["/go/bin/app"]
