@@ -1,12 +1,12 @@
 steps:
-#  - name: 'gcr.io/cloud-builders/docker'
-#    args: ['pull', 'gcr.io/$PROJECT_ID/steamwheedle-cartel/run-download-auctions/build:latest']
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['pull', 'gcr.io/$PROJECT_ID/steamwheedle-cartel/run-download-auctions/build:latest']
   - name: 'gcr.io/cloud-builders/docker'
     args: [
       'build',
       '-f', './build-env.Dockerfile',
       '-t', 'gcr.io/$PROJECT_ID/steamwheedle-cartel/run-download-auctions/build',
-#      '--cache-from', 'gcr.io/$PROJECT_ID/steamwheedle-cartel/run-download-auctions/build:latest',
+      '--cache-from', 'gcr.io/$PROJECT_ID/steamwheedle-cartel/run-download-auctions/build:latest',
       '.'
     ]
   - name: 'gcr.io/cloud-builders/docker'
@@ -16,14 +16,14 @@ steps:
       'steamwheedle-cartel/run-download-auctions/build'
     ]
 
-#  - name: 'gcr.io/cloud-builders/docker'
-#    args: ['pull', 'gcr.io/$PROJECT_ID/steamwheedle-cartel/run-download-auctions/runtime:latest']
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['pull', 'gcr.io/$PROJECT_ID/steamwheedle-cartel/run-download-auctions/runtime:latest']
   - name: 'gcr.io/cloud-builders/docker'
     args: [
       'build',
       '-f', './runtime-env.Dockerfile',
       '-t', 'gcr.io/$PROJECT_ID/steamwheedle-cartel/run-download-auctions/runtime',
-#      '--cache-from', 'gcr.io/$PROJECT_ID/steamwheedle-cartel/run-download-auctions/runtime:latest',
+      '--cache-from', 'gcr.io/$PROJECT_ID/steamwheedle-cartel/run-download-auctions/runtime:latest',
       '.'
     ]
   - name: 'gcr.io/cloud-builders/docker'
