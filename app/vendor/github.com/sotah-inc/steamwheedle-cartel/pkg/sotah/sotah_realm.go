@@ -175,6 +175,13 @@ type RealmTimestamps map[blizzard.RealmSlug][]UnixTimestamp
 
 type RegionRealmTimestamps map[blizzard.RegionName]RealmTimestamps
 
+func NewRegionRealmTupleFromRealm(r Realm) RegionRealmTuple {
+	return RegionRealmTuple{
+		RegionName: string(r.Region.Name),
+		RealmSlug:  string(r.Slug),
+	}
+}
+
 func NewRegionRealmTuple(data string) (RegionRealmTuple, error) {
 	var out RegionRealmTuple
 	if err := json.Unmarshal([]byte(data), &out); err != nil {
@@ -213,6 +220,29 @@ type RegionRealmTimestampTuple struct {
 }
 
 func (tuple RegionRealmTimestampTuple) EncodeForDelivery() (string, error) {
+	jsonEncoded, err := json.Marshal(tuple)
+	if err != nil {
+		return "", err
+	}
+
+	return string(jsonEncoded), nil
+}
+
+func NewRegionRealmTimestampSizeTuple(data string) (RegionRealmTimestampSizeTuple, error) {
+	var out RegionRealmTimestampSizeTuple
+	if err := json.Unmarshal([]byte(data), &out); err != nil {
+		return RegionRealmTimestampSizeTuple{}, err
+	}
+
+	return out, nil
+}
+
+type RegionRealmTimestampSizeTuple struct {
+	RegionRealmTimestampTuple
+	SizeBytes int `json:"size_bytes"`
+}
+
+func (tuple RegionRealmTimestampSizeTuple) EncodeForDelivery() (string, error) {
 	jsonEncoded, err := json.Marshal(tuple)
 	if err != nil {
 		return "", err

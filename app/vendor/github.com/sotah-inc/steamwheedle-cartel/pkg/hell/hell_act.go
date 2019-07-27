@@ -2,6 +2,9 @@ package hell
 
 type ActEndpoints struct {
 	DownloadAuctions string `firestore:"download_auctions"`
+	Gateway          string `firestore:"gateway"`
+	CleanupManifests string `firestore:"cleanup_manifests"`
+	CleanupAuctions  string `firestore:"cleanup_auctions"`
 }
 
 func (c Client) GetActEndpoints() (ActEndpoints, error) {

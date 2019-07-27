@@ -8,7 +8,8 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
-	"github.com/sotah-inc/steamwheedle-cartel/pkg/blizzard"
+	"github.com/sirupsen/logrus"
+	"github.com/sotah-inc/steamwheedle-cartel/pkg/logging"
 	"github.com/sotah-inc/steamwheedle-cartel/pkg/sotah"
 	"github.com/sotah-inc/steamwheedle-cartel/pkg/sotah/gameversions"
 	"github.com/sotah-inc/steamwheedle-cartel/pkg/store/regions"
@@ -16,7 +17,11 @@ import (
 	"google.golang.org/api/iterator"
 )
 
-func NewAuctionManifestBaseV2(c Client, location regions.Region, version gameversions.GameVersion) AuctionManifestBaseV2 {
+func NewAuctionManifestBaseV2(
+	c Client,
+	location regions.Region,
+	version gameversions.GameVersion,
+) AuctionManifestBaseV2 {
 	return AuctionManifestBaseV2{
 		base{client: c, location: location},
 		version,
@@ -52,7 +57,10 @@ func (b AuctionManifestBaseV2) GetObjectName(targetTimestamp sotah.UnixTimestamp
 	return fmt.Sprintf("%s/%d.json", b.GetObjectPrefix(realm), targetTimestamp)
 }
 
-func (b AuctionManifestBaseV2) GetObject(targetTimestamp sotah.UnixTimestamp, realm sotah.Realm, bkt *storage.BucketHandle) *storage.ObjectHandle {
+func (b AuctionManifestBaseV2) GetObject(
+	targetTimestamp sotah.UnixTimestamp,
+	realm sotah.Realm, bkt *storage.BucketHandle,
+) *storage.ObjectHandle {
 	return b.base.getObject(b.GetObjectName(targetTimestamp, realm), bkt)
 }
 
@@ -64,8 +72,13 @@ func (b AuctionManifestBaseV2) GetFirmObject(
 	return b.base.getFirmObject(b.GetObjectName(targetTimestamp, realm), bkt)
 }
 
-func (b AuctionManifestBaseV2) Handle(targetTimestamp sotah.UnixTimestamp, realm sotah.Realm, bkt *storage.BucketHandle) error {
-	normalizedTargetTimestamp := sotah.UnixTimestamp(sotah.NormalizeTargetDate(time.Unix(int64(targetTimestamp), 0)).Unix())
+func (b AuctionManifestBaseV2) Handle(
+	targetTimestamp sotah.UnixTimestamp,
+	realm sotah.Realm, bkt *storage.BucketHandle,
+) error {
+	normalizedTargetTimestamp := sotah.UnixTimestamp(
+		sotah.NormalizeTargetDate(time.Unix(int64(targetTimestamp), 0)).Unix(),
+	)
 
 	obj := b.GetObject(normalizedTargetTimestamp, realm, bkt)
 	nextManifest, err := func() (sotah.AuctionManifest, error) {
@@ -129,7 +142,7 @@ type DeleteAuctionManifestJob struct {
 	Count int
 }
 
-func (b AuctionManifestBaseV2) DeleteAll(regionRealms map[blizzard.RegionName]sotah.Realms) chan DeleteAuctionManifestJob {
+func (b AuctionManifestBaseV2) DeleteAll(regionRealms sotah.RegionRealms) chan DeleteAuctionManifestJob {
 	// spinning up the workers
 	in := make(chan sotah.Realm)
 	out := make(chan DeleteAuctionManifestJob)
@@ -212,7 +225,11 @@ type WriteAllOutJob struct {
 	NormalizedTimestamp sotah.UnixTimestamp
 }
 
-func (b AuctionManifestBaseV2) WriteAll(bkt *storage.BucketHandle, realm sotah.Realm, manifests map[sotah.UnixTimestamp]sotah.AuctionManifest) chan WriteAllOutJob {
+func (b AuctionManifestBaseV2) WriteAll(
+	bkt *storage.BucketHandle,
+	realm sotah.Realm,
+	manifests map[sotah.UnixTimestamp]sotah.AuctionManifest,
+) chan WriteAllOutJob {
 	// spinning up the workers
 	in := make(chan WriteAllInJob)
 	out := make(chan WriteAllOutJob)
@@ -294,7 +311,7 @@ func (b AuctionManifestBaseV2) NewAuctionManifest(obj *storage.ObjectHandle) (so
 }
 
 func (b AuctionManifestBaseV2) GetAllTimestamps(
-	regionRealms map[blizzard.RegionName]sotah.Realms,
+	regionRealms sotah.RegionRealms,
 	bkt *storage.BucketHandle,
 ) (sotah.RegionRealmTimestamps, error) {
 	out := make(chan GetTimestampsJob)
@@ -355,7 +372,7 @@ func (b AuctionManifestBaseV2) GetAllTimestamps(
 }
 
 func (b AuctionManifestBaseV2) GetAllExpiredTimestamps(
-	regionRealms map[blizzard.RegionName]sotah.Realms,
+	regionRealms sotah.RegionRealms,
 	bkt *storage.BucketHandle,
 ) (sotah.RegionRealmTimestamps, error) {
 	regionRealmTimestamps, err := b.GetAllTimestamps(regionRealms, bkt)
@@ -388,7 +405,33 @@ func (b AuctionManifestBaseV2) GetAllExpiredTimestamps(
 	return out, nil
 }
 
-func (b AuctionManifestBaseV2) GetTimestamps(realm sotah.Realm, bkt *storage.BucketHandle) ([]sotah.UnixTimestamp, error) {
+func (b AuctionManifestBaseV2) GetExpiredTimestamps(
+	realm sotah.Realm,
+	bkt *storage.BucketHandle,
+) ([]sotah.UnixTimestamp, error) {
+	timestamps, err := b.GetTimestamps(realm, bkt)
+	if err != nil {
+		return []sotah.UnixTimestamp{}, err
+	}
+
+	limit := sotah.NormalizeTargetDate(time.Now()).AddDate(0, 0, -14)
+	expiredTimestamps := []sotah.UnixTimestamp{}
+	for _, timestamp := range timestamps {
+		targetTime := time.Unix(int64(timestamp), 0)
+		if targetTime.After(limit) {
+			continue
+		}
+
+		expiredTimestamps = append(expiredTimestamps, timestamp)
+	}
+
+	return expiredTimestamps, nil
+}
+
+func (b AuctionManifestBaseV2) GetTimestamps(
+	realm sotah.Realm,
+	bkt *storage.BucketHandle,
+) ([]sotah.UnixTimestamp, error) {
 	prefix := fmt.Sprintf("%s/", b.GetObjectPrefix(realm))
 	it := bkt.Objects(b.client.Context, &storage.Query{Prefix: prefix})
 	out := []sotah.UnixTimestamp{}
@@ -411,4 +454,119 @@ func (b AuctionManifestBaseV2) GetTimestamps(realm sotah.Realm, bkt *storage.Buc
 	}
 
 	return out, nil
+}
+
+func (b AuctionManifestBaseV2) DeleteAllFromTimestamps(
+	timestamps []sotah.UnixTimestamp,
+	realm sotah.Realm,
+	bkt *storage.BucketHandle,
+) (int, error) {
+	// spinning up the workers
+	in := make(chan sotah.UnixTimestamp)
+	out := make(chan DeleteAllFromTimestampsJob)
+	worker := func() {
+		for targetTimestamp := range in {
+			entry := logging.WithFields(logrus.Fields{
+				"region":           realm.Region.Name,
+				"realm":            realm.Slug,
+				"target-timestamp": targetTimestamp,
+			})
+			entry.Info("Handling target-timestamp")
+
+			obj := bkt.Object(b.GetObjectName(targetTimestamp, realm))
+
+			exists, err := b.ObjectExists(obj)
+			if err != nil {
+				entry.WithField("error", err.Error()).Error("Failed to check if obj exists")
+
+				out <- DeleteAllFromTimestampsJob{
+					Err: err,
+					RegionRealmTimestampTuple: sotah.RegionRealmTimestampTuple{
+						RegionRealmTuple: sotah.NewRegionRealmTupleFromRealm(realm),
+						TargetTimestamp:  int(targetTimestamp),
+					},
+				}
+
+				continue
+			}
+			if !exists {
+				entry.Info("Obj does not exist")
+
+				out <- DeleteAllFromTimestampsJob{
+					Err: nil,
+					RegionRealmTimestampTuple: sotah.RegionRealmTimestampTuple{
+						RegionRealmTuple: sotah.NewRegionRealmTupleFromRealm(realm),
+						TargetTimestamp:  int(targetTimestamp),
+					},
+				}
+
+				continue
+			}
+
+			attrs, err := obj.Attrs(b.client.Context)
+			if err != nil {
+				entry.WithField("error", err.Error()).Error("Failed to get obj attrs")
+
+				out <- DeleteAllFromTimestampsJob{
+					Err: err,
+					RegionRealmTimestampTuple: sotah.RegionRealmTimestampTuple{
+						RegionRealmTuple: sotah.NewRegionRealmTupleFromRealm(realm),
+						TargetTimestamp:  int(targetTimestamp),
+					},
+				}
+
+				continue
+			}
+
+			if err := obj.Delete(b.client.Context); err != nil {
+				entry.WithField("error", err.Error()).Error("Could not delete obj")
+
+				out <- DeleteAllFromTimestampsJob{
+					Err: err,
+					RegionRealmTimestampTuple: sotah.RegionRealmTimestampTuple{
+						RegionRealmTuple: sotah.NewRegionRealmTupleFromRealm(realm),
+						TargetTimestamp:  int(targetTimestamp),
+					},
+				}
+
+				continue
+			}
+
+			entry.Info("Obj deleted")
+
+			out <- DeleteAllFromTimestampsJob{
+				RegionRealmTimestampTuple: sotah.RegionRealmTimestampTuple{
+					RegionRealmTuple: sotah.NewRegionRealmTupleFromRealm(realm),
+					TargetTimestamp:  int(targetTimestamp),
+				},
+				Err:  nil,
+				Size: attrs.Size,
+			}
+		}
+	}
+	postWork := func() {
+		close(out)
+	}
+	util.Work(16, worker, postWork)
+
+	// queueing it up
+	go func() {
+		for _, targetTimestamp := range timestamps {
+			in <- targetTimestamp
+		}
+
+		close(in)
+	}()
+
+	// waiting for it to drain out
+	totalDeleted := 0
+	for outJob := range out {
+		if outJob.Err != nil {
+			return 0, outJob.Err
+		}
+
+		totalDeleted += 1
+	}
+
+	return totalDeleted, nil
 }
