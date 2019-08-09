@@ -40,7 +40,7 @@ steps:
       '--platform', 'managed',
       '--no-allow-unauthenticated',
       '--timeout', '120s',
-      '--concurrency', '40',
+      '--concurrency', '20',
       '--memory', '512M'
     ]
 images: [
